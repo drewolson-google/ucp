@@ -326,6 +326,131 @@ payment instrument, or by removing the claim from `context.eligibility` to
 renegotiate the checkout (obtaining updated pricing, availability, etc.)
 and then resubmitting for completion.
 
+### Warning Presentation
+
+The `presentation` field on warning messages controls the rendering
+contract the platform **MUST** follow. When omitted, it defaults to
+`"notice"`.
+
+| | `notice` (default) | `disclosure` |
+| :--- | :--- | :--- |
+| Display content | **MUST** | **MUST** |
+| Proximity to `path` | **MAY** | **MUST** |
+| Dismissible | **MAY** | **MUST NOT** |
+| Render `image_url` | **MAY** | **MUST** |
+| Render `url` | **MAY** | **SHOULD** |
+| Escalate if cannot honor | — | **MUST** via `continue_url` |
+
+#### `notice` (default)
+
+The default rendering contract for warnings. Platforms **MUST** display
+the warning content to the buyer. Platforms **MAY** render notices in a
+banner, tray, or toast, and **MAY** allow the buyer to dismiss them.
+
+#### `disclosure`
+
+Warnings with `presentation: "disclosure"` carry notices — safety
+warnings, allergen declarations, compliance content, etc. — that
+**MUST** follow the prescribed rendering contract below.
+
+**Platform requirements:**
+
+* **MUST** display the warning `content` to the buyer.
+* **MUST** display the warning in proximity to the component referenced
+  by `path`, preserving the association between the disclosure and its
+  subject. When `path` is omitted, the disclosure applies to the response
+  as a whole.
+* **MUST NOT** hide, collapse, or auto-dismiss the warning.
+* **MUST** render `image_url` when present (e.g., warning symbol,
+  energy class label).
+* **SHOULD** render `url` as a navigable reference link when present.
+
+Warnings with `presentation: "disclosure"` **SHOULD** be given rendering
+priority over notices.
+
+Platforms that cannot honor the disclosure rendering contract **MUST**
+escalate to merchant UI via `continue_url` rather than silently
+downgrading to a notice.
+
+**Business requirements:**
+
+* **MUST** set `presentation: "disclosure"` when the warning content must
+  be displayed alongside a specific component and must not be hidden or
+  auto-dismissed.
+* **SHOULD** use the `path` field to associate disclosures with the
+  relevant component in the response.
+* **SHOULD** provide a `code` that identifies the disclosure category
+  (e.g., `prop65`, `allergens`, `energy_label`).
+* **SHOULD** provide `image_url` when the disclosure has an associated
+  visual element (e.g., warning symbol, energy class label).
+* **SHOULD** provide `url` when a reference link is available for the
+  buyer to learn more.
+
+#### Disclosure and Acknowledgment
+
+The `presentation` field controls how the warning is rendered, not
+whether the checkout can proceed. When affirmative buyer acknowledgment
+or authorization is also required, the business **MAY** combine the
+disclosure with the escalation mechanisms described in the
+[Checkout Status Lifecycle](#checkout-status-lifecycle) to ensure the
+appropriate buyer input is obtained.
+
+#### Jurisdiction and Applicability
+
+It is the business's responsibility to determine which disclosures apply
+to a given session and return only those that are relevant. Businesses
+**SHOULD** use buyer-provided data (`context` and other inputs) and
+product attributes to resolve jurisdiction-specific requirements.
+Platforms do not affect or resolve disclosure applicability — they render
+what they receive from the business.
+
+#### Example
+
+A checkout response containing both a recoverable error and a disclosure
+warning on a line item:
+
+```json
+{
+  "ucp": { "version": "{{ ucp_version }}", "status": "success" },
+  "id": "chk_abc123",
+  "status": "incomplete",
+  "currency": "USD",
+  "line_items": [
+    {
+      "id": "li_1",
+      "item": { "id": "item_456", "title": "Artisan Nut Butter Collection", "image_url": "https://merchant.com/nut-butter.jpg" },
+      "quantity": 1,
+      "totals": [{ "type": "subtotal", "amount": 1299 }]
+    }
+  ],
+  "totals": [{ "type": "total", "amount": 1299 }],
+  "messages": [
+    {
+      "type": "error",
+      "code": "field_required",
+      "path": "$.buyer.email",
+      "content": "Buyer email is required",
+      "severity": "recoverable"
+    },
+    {
+      "type": "warning",
+      "code": "allergens",
+      "path": "$.line_items[0]",
+      "content": "**Contains: tree nuts.** Produced in a facility that also processes peanuts, milk, and soy.",
+      "content_type": "markdown",
+      "presentation": "disclosure",
+      "image_url": "https://merchant.com/allergen-tree-nuts.svg",
+      "url": "https://merchant.com/allergen-info"
+    }
+  ],
+  "links": []
+}
+```
+
+The platform resolves the recoverable error programmatically while
+rendering the allergen disclosure in proximity to the referenced line
+item.
+
 ## Continue URL
 
 The `continue_url` field enables checkout handoff from platform to business UI,
